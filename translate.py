@@ -29,7 +29,7 @@ def load_config(config_path="config.json", service_name=None):
         print("配置文件未找到，请检查 config.json 是否存在！")
         sys.exit(1)
     except json.JSONDecodeError:
-        print("配置文件格式错误，请确保 config.json 是有效的 JSON 文件！")
+        print("配置文件格式错误，请确保 config.json 是有效��� JSON 文件！")
         sys.exit(1)
 
 # 配置重试策略
@@ -71,41 +71,32 @@ class TranslationQueue:
 # 改翻译函数为线程工作函数
 def translate_worker(chunk_data, config, translation_queue):
     index, content = chunk_data
+    
+    # 检测内容类型（man手册还是help输出）
+    is_man_page = ".SH" in content or ".TH" in content
+    
+    system_prompt = """你是一位专业的技术文档翻译专家，特别擅长将英文命令行文档翻译成中文。请遵循以下规则：
+
+1. 保持专业术语的准确性，必要时保留英文原文，采用"中文（英文）"的格式
+2. 对于 man 手册：
+   - 严格保持所有 nroff/troff 格式标记
+   - 保持命令语法和参数格式不变
+3. 对于 help 输出：
+   - 保持选项格式（如 --help, -h）不变
+   - 保持示例命令和路径不变
+4. 命令行选项说明采用："选项名称 - 中文说明"的格式
+5. 确保翻译准确、专业、通俗易懂
+6. 保持所有空格、缩进和换行格式"""
+
+    # 添加内容类型提示
+    if not is_man_page:
+        system_prompt += "\n注意：这是命令的 help 输出，不是 man 手册，请保持命令行格式和示例的原样显示。"
+
     headers = {
         "Authorization": f"Bearer {config['api_key']}",
         "Content-Type": "application/json"
     }
     
-    system_prompt = """你是一位专业的技术文档翻译专家，特别擅长将英文命令行手册（man pages）翻译成中文。请遵循以下规则：
-1. 保持专业术语的准确性，必要时保留英文原文，采用"中文（英文）"的格式
-2. 严格保持所有 nroff/troff 格式标记，包括：
-   - .SH（章节标题）
-   - .B（粗体）
-   - .I（斜体）
-   - .PP（段落）
-   - .TP（标签段落）
-   等等
-3. 以下内容保持原样不翻译：
-   - 命令语法和参数
-   - 代码块和命令示例
-   - 配置文件路径
-   - 环境变量名称
-   - 所有以 . 开头的格式命令
-4. 命令行选项说明采用："选项名称 - 中文说明"的格式
-5. 章节标题翻译对照：
-   - NAME → 名称
-   - SYNOPSIS → 概要
-   - DESCRIPTION → 描述
-   - OPTIONS → 选项
-   - EXAMPLES → 示例
-   - FILES → 相关文件
-   - SEE ALSO → 参见
-   - BUGS → 已知问题
-   - AUTHOR → 作者
-6. 确保翻译准确、专业、通俗易懂
-7. 对于 SYNOPSIS ���分，保持命令格式不变，仅翻译说明文本
-8. 保持所有空格、缩进和换行格式"""
-
     payload = {
         "model": config["model"],
         "messages": [
