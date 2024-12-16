@@ -59,9 +59,9 @@ chmod +x manzh.sh config_manager.sh translate_man.sh clean.sh
 
 1. 下载并解压发布包：
 ```bash
-wget https://github.com/cksdxz1007/ManZH/releases/download/v1.0.0/manzh-1.0.0.tar.gz
-tar xzf manzh-1.0.0.tar.gz
-cd manzh-1.0.0
+wget https://github.com/cksdxz1007/ManZH/releases/download/v1.0.1/manzh-1.0.1.tar.gz
+tar xzf manzh-1.0.1.tar.gz
+cd manzh-1.0.1
 ```
 
 ## 使用方法
@@ -149,7 +149,7 @@ man -M /usr/local/share/man/zh_CN <命令>
 man -M /usr/local/share/man/zh_CN ls
 ```
 
-注意：对于没有 man 手册的命令（如 conda），ManZH 会自动尝试翻译 --help 输出：
+注���：对于没有 man 手册的命令（如 conda），ManZH 会自动尝试翻译 --help 输出：
 ```bash
 # 翻译 conda 命令的帮助信息
 sudo ./manzh.sh translate conda
@@ -213,6 +213,11 @@ MIT
 cynning
 
 ## 更新日志
+
+### v1.0.1
+- 添加对 --help 输出的翻译支持
+- 优化无 man 手册命令的处理
+- 改进翻译提示信息
 
 ### v1.0.0
 - 初始版本发布
