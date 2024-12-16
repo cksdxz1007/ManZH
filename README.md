@@ -199,7 +199,7 @@ MIT
 
 ## 作者
 
-[Your Name]
+cynning
 
 ## 更新日志
 
