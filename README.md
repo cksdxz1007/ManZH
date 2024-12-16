@@ -28,8 +28,8 @@
 
 1. 克隆仓库：
 ```bash
-git clone [repository-url]
-cd man-zh-cn
+git clone git@github.com:cksdxz1007/ManZH.git
+cd ManZH
 ```
 
 2. 安装依赖：
@@ -51,7 +51,16 @@ sudo yum install jq python3 python3-requests man-db groff
 
 3. 添加执行权限：
 ```bash
-chmod +x manzhcn.sh config_manager.sh translate_man.sh clean.sh
+chmod +x manzh.sh config_manager.sh translate_man.sh clean.sh
+```
+
+### 方法一：使用安装脚本
+
+1. 下载并解压发布包：
+```bash
+wget https://github.com/cksdxz1007/ManZH/releases/download/v1.0.0/manzh-1.0.0.tar.gz
+tar xzf manzh-1.0.0.tar.gz
+cd manzh-1.0.0
 ```
 
 ## 使用方法
@@ -60,7 +69,7 @@ chmod +x manzhcn.sh config_manager.sh translate_man.sh clean.sh
 
 直接运行主程序：
 ```bash
-sudo ./manzhcn.sh
+sudo ./manzh.sh
 ```
 
 将显示交互式菜单，包含以下选项：
@@ -74,22 +83,22 @@ sudo ./manzhcn.sh
 
 1. 翻译命令手册：
 ```bash
-sudo ./manzhcn.sh translate ls
+sudo ./manzh.sh translate ls
 ```
 
 2. 配置翻译服务：
 ```bash
-./manzhcn.sh config
+./manzh.sh config
 ```
 
 3. 查看已翻译手册：
 ```bash
-./manzhcn.sh list
+./manzh.sh list
 ```
 
 4. 清理已翻译手册：
 ```bash
-sudo ./manzhcn.sh clean
+sudo ./manzh.sh clean
 ```
 
 ## 配置翻译服务
@@ -97,7 +106,7 @@ sudo ./manzhcn.sh clean
 支持多种翻译服务，可以通过配置管理工具进行管理：
 
 ```bash
-./manzhcn.sh config
+./manzh.sh config
 ```
 
 支持的服务：
@@ -143,12 +152,12 @@ man -M /usr/local/share/man/zh_CN ls
 
 ```
 .
-├── manzhcn.sh          # 主控脚本
+├── manzh.sh           # 主控脚本
 ├── config_manager.sh   # 配置管理脚本
 ├── translate_man.sh    # 翻译脚本
 ├── translate.py        # Python 翻译模块
 ├── clean.sh           # 清理脚本
-├── config.json        # 配���文件
+├── config.json        # 配置文件
 └── README.md          # 说明文档
 ```
 
