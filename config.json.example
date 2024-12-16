@@ -1,0 +1,26 @@
+{
+  "services": {
+    "openai": {
+      "service": "openai",
+      "api_key": "your-openai-api-key-here",
+      "url": "https://api.openai.com/v1/chat/completions",
+      "model": "gpt-4",
+      "language": "zh-CN"
+    },
+    "deepseek": {
+      "service": "deepseek",
+      "api_key": "your-deepseek-api-key-here",
+      "url": "https://api.deepseek.com/v1/chat/completions",
+      "model": "deepseek-chat",
+      "language": "zh-CN"
+    },
+    "ollama": {
+      "service": "ollama",
+      "api_key": "not-required",
+      "url": "http://localhost:11434/v1/chat/completions",
+      "model": "qwen:7b",
+      "language": "zh-CN"
+    }
+  },
+  "default_service": "openai"
+}
