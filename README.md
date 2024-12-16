@@ -5,6 +5,7 @@
 ## 功能特点
 
 - 自动获取和翻译命令的 man 手册
+- 支持翻译命令的 --help 输出（当没有 man 手册时）
 - 支持多个翻译服务（OpenAI、DeepSeek、Ollama 等）
 - 支持多章节手册的批量翻译
 - 保留原始格式和代码块
@@ -148,6 +149,15 @@ man -M /usr/local/share/man/zh_CN <命令>
 man -M /usr/local/share/man/zh_CN ls
 ```
 
+注意：对于没有 man 手册的命令（如 conda），ManZH 会自动尝试翻译 --help 输出：
+```bash
+# 翻译 conda 命令的帮助信息
+sudo ./manzh.sh translate conda
+
+# 查看翻译结果
+man -M /usr/local/share/man/zh_CN conda
+```
+
 ## 目录结构
 
 ```
@@ -183,7 +193,8 @@ man -M /usr/local/share/man/zh_CN ls
    - 尝试清理后重新翻译
    - 检查原始手册格式
 
-## 贡献指南
+## 贡献指南 man conda
+No manual entry for conda
 
 欢迎提交 Issue 和 Pull Request！
 

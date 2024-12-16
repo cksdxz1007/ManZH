@@ -132,129 +132,120 @@ function setup_manpath() {
 EOF
 }
 
-# 主流程
-COMMAND=$1
-if [[ -z "$COMMAND" ]]; then
-    echo "使用方法: ./translate_man.sh <命令>"
-    exit 1
-fi
-
-# 修改章节检查逻辑
-if [[ "$(uname)" == "Darwin" ]]; then
-    # 获取所有可用的章节
-    SECTIONS=($(man -w "$COMMAND" 2>/dev/null | grep -o '[0-9]' | sort -u))
-    TOTAL_SECTIONS=${#SECTIONS[@]}
-else
-    # Linux 版本保持不变
-    TOTAL_SECTIONS=0
-    for SECTION in {1..9}; do
-        if man -s "$SECTION" "$COMMAND" > /dev/null 2>&1; then
-            TOTAL_SECTIONS=$((TOTAL_SECTIONS + 1))
-        fi
-    done
-fi
-
-if [[ $TOTAL_SECTIONS -eq 0 ]]; then
-    echo "未找到 ${COMMAND} 的任何手册页！" | tee -a "$LOG_FILE"
-    exit 1
-fi
-
-COMPLETED_SECTIONS=0
-START_TIME=$(date +%s)
-
-echo "开始翻译 ${COMMAND} 的 ${TOTAL_SECTIONS} 个手册页..."
-
-# 修改主循环
-if [[ "$(uname)" == "Darwin" ]]; then
-    # macOS 版本的处理逻辑
-    if [[ ${#SECTIONS[@]} -eq 0 ]]; then
-        echo "未找到 ${COMMAND} 的任何手册页！" | tee -a "$LOG_FILE"
-        exit 1
+# 获取命令帮助信息
+function get_command_help() {
+    local cmd="$1"
+    local help_text=""
+    
+    # 尝试 --help
+    help_text=$($cmd --help 2>/dev/null)
+    if [[ $? -eq 0 && -n "$help_text" ]]; then
+        echo "$help_text"
+        return 0
     fi
+    
+    # 尝试 -h
+    help_text=$($cmd -h 2>/dev/null)
+    if [[ $? -eq 0 && -n "$help_text" ]]; then
+        echo "$help_text"
+        return 0
+    fi
+    
+    # 尝试 help 命令
+    help_text=$(help "$cmd" 2>/dev/null)
+    if [[ $? -eq 0 && -n "$help_text" ]]; then
+        echo "$help_text"
+        return 0
+    fi
+    
+    return 1
+}
 
-    COMPLETED_SECTIONS=0
-    for SECTION in "${SECTIONS[@]}"; do
-        echo "[$((COMPLETED_SECTIONS + 1))/$TOTAL_SECTIONS] 正在处理章节 ${SECTION}..."
-        
-        if check_translated "$COMMAND" "$SECTION"; then
-            echo "章节 ${SECTION} 已经翻译过，跳过..."
-            COMPLETED_SECTIONS=$((COMPLETED_SECTIONS + 1))
-            show_progress_bar "$COMPLETED_SECTIONS" "$TOTAL_SECTIONS"
-            continue
-        fi
+# 检查命令是否存在
+function check_command() {
+    local cmd="$1"
+    if ! command -v "$cmd" &> /dev/null; then
+        echo "错误：命令 '$cmd' 不存在"
+        return 1
+    fi
+    return 0
+}
 
-        echo "正在获取章节 ${SECTION} 的手册内容..."
-        MAN_CONTENT=$(get_man_content "$COMMAND" "$SECTION")
-        if [[ $? -ne 0 ]]; then
-            COMPLETED_SECTIONS=$((COMPLETED_SECTIONS + 1))
-            show_progress_bar "$COMPLETED_SECTIONS" "$TOTAL_SECTIONS"
-            continue
-        fi
+# 保存翻译后的帮助文档
+function save_help_translated() {
+    local content="$1"
+    local command="$2"
+    local man_path="$TRANSLATED_DIR/man1"  # 帮助文档默认放在 man1 目录
+    
+    # 创建目录
+    mkdir -p "$man_path"
+    
+    # 将 help 输出转换为 man 格式
+    cat > "$man_path/${command}.1" << EOF
+.TH ${command} 1 "$(date +"%B %Y")" "Help Output" "User Commands"
+.SH 名称
+${command} \- $(echo "$content" | head -n 1)
+.SH 描述
+${content}
+.SH 注意
+本手册页由 ManZH 根据 '${command} --help' 输出自动生成。
+EOF
+    
+    # 设置正确的权限
+    chmod 644 "$man_path/${command}.1"
+    
+    echo "翻译后的帮助文档已保存到：$man_path/${command}.1"
+}
 
-        echo "正在检查和格式化内容..."
-        PROCESSED_CONTENT=$(preprocess_content "$MAN_CONTENT")
+# 修改主处理函数
+function process_command() {
+    local cmd="$1"
+    local output=""
+    local translated_content=""
+    
+    # 检查命令是否存在
+    if ! check_command "$cmd"; then
+        echo "提示：请检查命令名称是否正确，或按 Ctrl+C 取消翻译"
+        return 1
+    fi
+    
+    # 首先尝试获取 man 手册
+    output=$(man "$cmd" 2>/dev/null)
+    if [[ $? -eq 0 && -n "$output" ]]; then
+        echo "正在翻译 man 手册..."
+        translated_content=$(echo "$output" | col -b | python3 translate.py)
+        save_translated "$translated_content" "$cmd" "1"
+        return 0
+    fi
+    
+    # 如果没有 man 手册，尝试获取 --help 输出
+    echo "注意：未找到 '$cmd' 的 man 手册，尝试翻译 --help 输出..."
+    output=$(get_command_help "$cmd")
+    if [[ $? -eq 0 && -n "$output" ]]; then
+        echo "正在翻译 help 信息..."
+        translated_content=$(echo "$output" | python3 translate.py)
+        save_help_translated "$translated_content" "$cmd"
+        return 0
+    fi
+    
+    # 如果都没有找到
+    echo "错误：无法获取 '$cmd' 的帮助信息"
+    echo "该命令可能："
+    echo "1. 不提供帮助文档"
+    echo "2. 需要特殊权限才能访问"
+    echo "3. 命令名称输入错误"
+    echo
+    echo "建议："
+    echo "1. 检查命令名称是否正确"
+    echo "2. 尝试使用 sudo 运行"
+    echo "3. 查看命令的官方文档"
+    return 1
+}
 
-        echo "正在翻译章节 ${SECTION} 的手册内容..."
-        START_SECTION_TIME=$(date +%s)
-        TRANSLATED_CONTENT=$(translate_content "$PROCESSED_CONTENT")
-        END_SECTION_TIME=$(date +%s)
-
-        echo "翻译完成！用时 $((END_SECTION_TIME - START_SECTION_TIME)) 秒。"
-
-        echo "正在保存章节 ${SECTION} 的翻译..."
-        save_translated "$TRANSLATED_CONTENT" "$COMMAND" "$SECTION"
-
-        COMPLETED_SECTIONS=$((COMPLETED_SECTIONS + 1))
-        show_progress_bar "$COMPLETED_SECTIONS" "$TOTAL_SECTIONS"
-    done
-else
-    # Linux 版本循环逻辑保持不变
-    for SECTION in {1..9}; do
-        if ! man -s "$SECTION" "$COMMAND" > /dev/null 2>&1; then
-            continue
-        fi
-
-        if check_translated "$COMMAND" "$SECTION"; then
-            COMPLETED_SECTIONS=$((COMPLETED_SECTIONS + 1))
-            show_progress_bar "$COMPLETED_SECTIONS" "$TOTAL_SECTIONS"
-            continue
-        fi
-
-        echo "[$((COMPLETED_SECTIONS + 1))/$TOTAL_SECTIONS] 正在获取章节 ${SECTION} 的手册内容..."
-        MAN_CONTENT=$(get_man_content "$COMMAND" "$SECTION")
-        if [[ $? -ne 0 ]]; then
-            COMPLETED_SECTIONS=$((COMPLETED_SECTIONS + 1))
-            show_progress_bar "$COMPLETED_SECTIONS" "$TOTAL_SECTIONS"
-            continue
-        fi
-
-        echo "[$((COMPLETED_SECTIONS + 1))/$TOTAL_SECTIONS] 正在检查和格式化内容..."
-        PROCESSED_CONTENT=$(preprocess_content "$MAN_CONTENT")
-
-        echo "[$((COMPLETED_SECTIONS + 1))/$TOTAL_SECTIONS] 正在翻译章节 ${SECTION} 的手册内容..."
-        START_SECTION_TIME=$(date +%s)
-        TRANSLATED_CONTENT=$(translate_content "$PROCESSED_CONTENT")
-        END_SECTION_TIME=$(date +%s)
-
-        echo "[$((COMPLETED_SECTIONS + 1))/$TOTAL_SECTIONS] 翻译完成！用时 $((END_SECTION_TIME - START_SECTION_TIME)) 秒。"
-
-        echo "[$((COMPLETED_SECTIONS + 1))/$TOTAL_SECTIONS] 正在保存章节 ${SECTION} 的翻译..."
-        save_translated "$TRANSLATED_CONTENT" "$COMMAND" "$SECTION"
-
-        COMPLETED_SECTIONS=$((COMPLETED_SECTIONS + 1))
-        show_progress_bar "$COMPLETED_SECTIONS" "$TOTAL_SECTIONS"
-    done
+# 主程序
+if [[ $# -eq 0 ]]; then
+    echo "用法: $0 <命令名称>"
+    exit 1
 fi
 
-END_TIME=$(date +%s)
-
-echo
-echo "翻译完成！已翻译 ${COMPLETED_SECTIONS}/${TOTAL_SECTIONS} 个章节。"
-echo "总用时 $((END_TIME - START_TIME)) 秒。"
-
-if [[ -s "$LOG_FILE" ]]; then
-    echo "部分章节翻译失败，详情请查看日志文件：$LOG_FILE"
-fi
-
-# 在主流程最后添加
-setup_manpath
+process_command "$1"
