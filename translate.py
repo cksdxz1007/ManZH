@@ -17,19 +17,26 @@ def load_config(config_path="config.json", service_name=None):
         if not service_name:
             service_name = config.get('default_service')
             if not service_name:
-                raise Exception("ManZH：未设置默认服务")
+                raise Exception("未设置默认服务")
         
         service_config = config.get('services', {}).get(service_name)
         if not service_config:
-            raise Exception(f"ManZH：服务 '{service_name}' 不存在")
+            raise Exception(f"服务 '{service_name}' 不存在")
+            
+        # 使用默认值或服务特定值
+        defaults = config.get('defaults', {})
+        service_config.setdefault('max_context_length', 
+                                defaults.get('max_context_length', 4096))
+        service_config.setdefault('max_output_length', 
+                                defaults.get('max_output_length', 2048))
             
         return service_config
         
     except FileNotFoundError:
-        print("配置文件未找到，请检查 config.json 是否存在！")
+        print("配置文件未找到！")
         sys.exit(1)
     except json.JSONDecodeError:
-        print("配置文件格式错误，请确保 config.json 是有效��� JSON 文件！")
+        print("配置文件格式错误！")
         sys.exit(1)
 
 # 配置重试策略
@@ -104,7 +111,7 @@ def translate_worker(chunk_data, config, translation_queue):
             {"role": "user", "content": f"请将以下man手册内容翻译成{config['language']}：\n\n{content}"}
         ],
         "temperature": 0.3,
-        "max_tokens": 4000
+        "max_tokens": config["max_output_length"]
     }
 
     session = create_retry_session()

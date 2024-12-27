@@ -109,12 +109,9 @@ function interactive_translate() {
         fi
         
         # 检查命令是否存在
-        if ! man "$cmd" &> /dev/null; then
-            echo "警告：找不到命令 '$cmd' 的手册页"
-            read -p "是否继续尝试翻译？[y/N] " confirm
-            if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
-                continue
-            fi
+        if ! command -v "$cmd" &> /dev/null; then
+            echo "错误：命令 '$cmd' 不存在"
+            continue
         fi
         
         # 执行翻译

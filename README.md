@@ -7,6 +7,8 @@
 - 自动获取和翻译命令的 man 手册
 - 支持翻译命令的 --help 输出（当没有 man 手册时）
 - 支持多个翻译服务（OpenAI、DeepSeek、Ollama 等）
+- 支持自定义上下文长度和输出长度
+- 智能适配不同翻译服务的参数
 - 支持多章节手册的批量翻译
 - 保留原始格式和代码块
 - 交互式配置界面
@@ -50,7 +52,7 @@ sudo apt install jq python3 python3-requests man-db groff
 sudo yum install jq python3 python3-requests man-db groff
 ```
 
-3. 添加执行权限：
+3. 添��执行权限：
 ```bash
 chmod +x manzh.sh config_manager.sh translate_man.sh clean.sh
 ```
@@ -125,10 +127,16 @@ sudo ./manzh.sh clean
       "api_key": "your-api-key",
       "url": "https://api.openai.com/v1/chat/completions",
       "model": "gpt-4",
-      "language": "zh-CN"
+      "language": "zh-CN",
+      "max_context_length": 8192,
+      "max_output_length": 4096
     }
   },
-  "default_service": "openai"
+  "default_service": "openai",
+  "defaults": {
+    "max_context_length": 4096,
+    "max_output_length": 2048
+  }
 }
 ```
 
@@ -149,7 +157,7 @@ man -M /usr/local/share/man/zh_CN <命令>
 man -M /usr/local/share/man/zh_CN ls
 ```
 
-注���：对于没有 man 手册的命令（如 conda），ManZH 会自动尝试翻译 --help 输出：
+注：对于没有 man 手册的命令（如 conda），ManZH 会自动尝试翻译 --help 输出：
 ```bash
 # 翻译 conda 命令的帮助信息
 sudo ./manzh.sh translate conda
@@ -199,7 +207,7 @@ No manual entry for conda
 欢迎提交 Issue 和 Pull Request！
 
 1. Fork 本仓库
-2. 创建特性分支
+2. 创建特性支持
 3. 提交更改
 4. 推送到分支
 5. 创建 Pull Request
@@ -218,6 +226,10 @@ cynning
 - 添加对 --help 输出的翻译支持
 - 优化无 man 手册命令的处理
 - 改进翻译提示信息
+- 添加上下文长度和输出长度配置
+- 优化配置文件兼容性处理
+- 改进命令检查和错误提示逻辑
+- 支持不同翻译服务的参数自定义
 
 ### v1.0.0
 - 初始版本发布

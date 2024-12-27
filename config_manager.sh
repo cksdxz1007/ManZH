@@ -9,16 +9,74 @@ if ! command -v jq &> /dev/null; then
     exit 1
 fi
 
-# 读取配置文件
+# 读取配置文件并处理兼容性
 function read_config() {
-    if [[ ! -f "$CONFIG_FILE" ]]; then
-        echo "{\"services\": {}, \"default_service\": null}" > "$CONFIG_FILE"
+    local config=""
+    
+    # 如果配置文件不存在或为空，创建新的
+    if [[ ! -f "$CONFIG_FILE" ]] || [[ ! -s "$CONFIG_FILE" ]]; then
+        echo "{\"services\": {}, \"default_service\": null, \"defaults\": {\"max_context_length\": 4096, \"max_output_length\": 2048}}" > "$CONFIG_FILE"
     fi
-    cat "$CONFIG_FILE"
+    
+    # 检查 JSON 格式是否有效
+    if ! jq '.' "$CONFIG_FILE" > /dev/null 2>&1; then
+        echo "错误：配置文件格式无效"
+        echo "正在重置配置文件..."
+        echo "{\"services\": {}, \"default_service\": null, \"defaults\": {\"max_context_length\": 4096, \"max_output_length\": 2048}}" > "$CONFIG_FILE"
+    fi
+    
+    # 读取配置文件
+    config=$(cat "$CONFIG_FILE")
+    
+    # 检查是否需要升级配置
+    local needs_upgrade=false
+    
+    # 检查是否存在 defaults 部分
+    if ! echo "$config" | jq -e '.defaults' > /dev/null 2>&1; then
+        config=$(echo "$config" | jq '. += {"defaults": {"max_context_length": 4096, "max_output_length": 2048}}')
+        needs_upgrade=true
+    fi
+    
+    # 检查每个服务的配置
+    if echo "$config" | jq -e '.services' > /dev/null 2>&1; then
+        local services=($(echo "$config" | jq -r '.services | keys[]'))
+        for service in "${services[@]}"; do
+            # 检查是否缺少上下文长度设置
+            if ! echo "$config" | jq -e ".services.\"$service\".max_context_length" > /dev/null 2>&1; then
+                echo "注意：服务 '$service' 缺少上下文长度设置，将使用默认值"
+                config=$(echo "$config" | jq ".services.\"$service\".max_context_length = 4096")
+                needs_upgrade=true
+            fi
+            
+            # 检查是否缺少输出长度设置
+            if ! echo "$config" | jq -e ".services.\"$service\".max_output_length" > /dev/null 2>&1; then
+                echo "注意：服务 '$service' 缺少输出长度设置，将使用默认值"
+                config=$(echo "$config" | jq ".services.\"$service\".max_output_length = 2048")
+                needs_upgrade=true
+            fi
+        done
+    fi
+    
+    # 如果配置有更新，保存并提示用户
+    if [[ "$needs_upgrade" == "true" ]]; then
+        echo "配置文件已更新，添加了缺失的参数设置"
+        echo "您可以使用 '更新服务配置' 选项来调整这些参数"
+        echo
+        save_config "$config"
+    fi
+    
+    echo "$config"
 }
 
 # 保存配置文件
 function save_config() {
+    # 验证 JSON 格式
+    if ! echo "$1" | jq '.' > /dev/null 2>&1; then
+        echo "错误：无效的配置数据"
+        return 1
+    fi
+    
+    # 保存配置
     echo "$1" | jq '.' > "$CONFIG_FILE"
 }
 
@@ -86,13 +144,57 @@ function interactive_add_service() {
         esac
     done
     
-    # 确认信息
+    # 添加上下文长度设置
+    echo "设置上下文长度（字符数）："
+    echo "1) 4K  (4096)"
+    echo "2) 8K  (8192)"
+    echo "3) 32K (32768)"
+    echo "4) 64K (65536)"
+    echo "5) 自定义"
+    
+    while true; do
+        read -p "请选择 [1-5]: " length_choice
+        case $length_choice in
+            1) context_length=4096; break;;
+            2) context_length=8192; break;;
+            3) context_length=32768; break;;
+            4) context_length=65536; break;;
+            5) read -p "请输入自定义长度: " context_length
+               if [[ "$context_length" =~ ^[0-9]+$ ]]; then break; fi
+               echo "请输入有效的数字";;
+            *) echo "请选择有效的选项";;
+        esac
+    done
+    
+    # 添加输出长度设置
+    echo "设置最大输出长度（字符数）："
+    echo "1) 2K  (2048)"
+    echo "2) 4K  (4096)"
+    echo "3) 8K  (8192)"
+    echo "4) 自定义"
+    
+    while true; do
+        read -p "请选择 [1-4]: " output_choice
+        case $output_choice in
+            1) output_length=2048; break;;
+            2) output_length=4096; break;;
+            3) output_length=8192; break;;
+            4) read -p "请输入自定义长度: " output_length
+               if [[ "$output_length" =~ ^[0-9]+$ ]]; then break; fi
+               echo "请输入有效的数字";;
+            *) echo "请选择有效的选项";;
+        esac
+    done
+    
+    # 更新确认信息显示
     echo
     echo "请确认以下信息："
     echo "服务名称: $service_name"
     echo "API 密钥: $api_key"
     echo "API 地址: $url"
     echo "模型名称: $model"
+    echo "上下文长度: $context_length"
+    echo "输出长度: $output_length"
     
     read -p "是否确认添加？[y/N] " confirm
     if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
@@ -100,14 +202,16 @@ function interactive_add_service() {
         return 1
     fi
     
-    # 添加服务
+    # 更新配置保存
     local config=$(read_config)
     config=$(echo "$config" | jq ".services.\"$service_name\" = {
         \"service\": \"$service_name\",
         \"api_key\": \"$api_key\",
         \"url\": \"$url\",
         \"model\": \"$model\",
-        \"language\": \"zh-CN\"
+        \"language\": \"zh-CN\",
+        \"max_context_length\": $context_length,
+        \"max_output_length\": $output_length
     }")
     
     # 如果是第一个服务，设为默认
@@ -201,7 +305,7 @@ function interactive_update_service() {
             service_name="${services[$((choice-1))]}"
             break
         fi
-        echo "请���入有效的选项"
+        echo "请输入有效的选项"
     done
     
     # 选择要更新的字段
@@ -210,9 +314,11 @@ function interactive_update_service() {
     echo "2) API 地址"
     echo "3) 模型名称"
     echo "4) 语言设置"
+    echo "5) 上下文长度"
+    echo "6) 输出长度"
     
     while true; do
-        read -p "请选择 [1-4]: " field_choice
+        read -p "请选择 [1-6]: " field_choice
         case $field_choice in
             1) field="api_key"
                read -p "请输入新的 API 密钥: " value
@@ -234,7 +340,7 @@ function interactive_update_service() {
                done
                ;;
             3) field="model"
-               echo "���择模型："
+               echo "选择模型："
                echo "1) GPT-4"
                echo "2) GPT-3.5-turbo"
                echo "3) DeepSeek-chat"
@@ -255,6 +361,46 @@ function interactive_update_service() {
                read -p "请输入语言代码 (默认 zh-CN): " value
                value=${value:-zh-CN}
                ;;
+            5) field="max_context_length"
+               echo "设置上下文长度（字符数）："
+               echo "1) 4K  (4096)"
+               echo "2) 8K  (8192)"
+               echo "3) 32K (32768)"
+               echo "4) 64K (65536)"
+               echo "5) 自定义"
+               while true; do
+                   read -p "请选择 [1-5]: " length_choice
+                   case $length_choice in
+                       1) value=4096; break;;
+                       2) value=8192; break;;
+                       3) value=32768; break;;
+                       4) value=65536; break;;
+                       5) read -p "请输入自定义长度: " value
+                          if [[ "$value" =~ ^[0-9]+$ ]]; then break; fi
+                          echo "请输入有效的数字";;
+                       *) echo "请选择有效的选项";;
+                   esac
+               done
+               ;;
+            6) field="max_output_length"
+               echo "设置最大输出长度（字符数）："
+               echo "1) 2K  (2048)"
+               echo "2) 4K  (4096)"
+               echo "3) 8K  (8192)"
+               echo "4) 自定义"
+               while true; do
+                   read -p "请选择 [1-4]: " output_choice
+                   case $output_choice in
+                       1) value=2048; break;;
+                       2) value=4096; break;;
+                       3) value=8192; break;;
+                       4) read -p "请输入自定义长度: " value
+                          if [[ "$value" =~ ^[0-9]+$ ]]; then break; fi
+                          echo "请输入有效的数字";;
+                       *) echo "请选择有效的选项";;
+                   esac
+               done
+               ;;
             *) echo "请选择有效的选项"; continue;;
         esac
         break
@@ -274,7 +420,11 @@ function interactive_update_service() {
     fi
     
     # 更新配置
-    config=$(echo "$config" | jq ".services.\"$service_name\".\"$field\" = \"$value\"")
+    if [[ "$field" == "max_context_length" || "$field" == "max_output_length" ]]; then
+        config=$(echo "$config" | jq ".services.\"$service_name\".\"$field\" = $value")
+    else
+        config=$(echo "$config" | jq ".services.\"$service_name\".\"$field\" = \"$value\"")
+    fi
     save_config "$config"
     echo "服务 '$service_name' 的 '$field' 已更新"
 }
@@ -313,7 +463,7 @@ function interactive_set_default() {
         echo "请输入有效的选项"
     done
     
-    # ���置默认服务
+    # 设置默认服务
     config=$(echo "$config" | jq ".default_service = \"$service_name\"")
     save_config "$config"
     echo "已将 '$service_name' 设为默认服务"
@@ -337,6 +487,8 @@ function list_services() {
         local api_key=$(echo "$config" | jq -r ".services.\"$service\".api_key")
         local url=$(echo "$config" | jq -r ".services.\"$service\".url")
         local model=$(echo "$config" | jq -r ".services.\"$service\".model")
+        local context_length=$(echo "$config" | jq -r ".services.\"$service\".max_context_length")
+        local output_length=$(echo "$config" | jq -r ".services.\"$service\".max_output_length")
         
         if [[ "$service" == "$default_service" ]]; then
             echo "* $service (默认服务)"
@@ -346,6 +498,8 @@ function list_services() {
         echo "    API 地址: $url"
         echo "    模型: $model"
         echo "    API 密钥: ${api_key:0:8}..."
+        echo "    上下文长度: $context_length"
+        echo "    输出长度: $output_length"
         echo
     done
 }
@@ -369,6 +523,8 @@ function get_default_service() {
     echo "模型: $(echo "$service_config" | jq -r '.model')"
     echo "API 密钥: $(echo "$service_config" | jq -r '.api_key' | cut -c1-8)..."
     echo "语言: $(echo "$service_config" | jq -r '.language')"
+    echo "上下文长度: $(echo "$service_config" | jq -r '.max_context_length')"
+    echo "输出长度: $(echo "$service_config" | jq -r '.max_output_length')"
 }
 
 # 主菜单

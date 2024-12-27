@@ -151,13 +151,6 @@ function get_command_help() {
         return 0
     fi
     
-    # 尝试 help 命令
-    help_text=$(help "$cmd" 2>/dev/null)
-    if [[ $? -eq 0 && -n "$help_text" ]]; then
-        echo "$help_text"
-        return 0
-    fi
-    
     return 1
 }
 
@@ -201,44 +194,47 @@ EOF
 function process_command() {
     local cmd="$1"
     local output=""
-    local translated_content=""
+    local help_output=""
     
-    # 检查命令是否存在
-    if ! check_command "$cmd"; then
-        echo "提示：请检查命令名称是否正确，或按 Ctrl+C 取消翻译"
+    # 1. 检查命令是否存在
+    if ! command -v "$cmd" &> /dev/null; then
+        echo "错误：命令 '$cmd' 不存在"
         return 1
     fi
     
-    # 首先尝试获取 man 手册
+    # 2. 尝试获取 man 手册
     output=$(man "$cmd" 2>/dev/null)
     if [[ $? -eq 0 && -n "$output" ]]; then
         echo "正在翻译 man 手册..."
-        translated_content=$(echo "$output" | col -b | python3 translate.py)
-        save_translated "$translated_content" "$cmd" "1"
+        echo "$output" | col -b | python3 translate.py
         return 0
     fi
     
-    # 如果没有 man 手册，尝试获取 --help 输出
-    echo "注意：未找到 '$cmd' 的 man 手册，尝试翻译 --help 输出..."
-    output=$(get_command_help "$cmd")
-    if [[ $? -eq 0 && -n "$output" ]]; then
-        echo "正在翻译 help 信息..."
-        translated_content=$(echo "$output" | python3 translate.py)
-        save_help_translated "$translated_content" "$cmd"
-        return 0
+    # 3. 如果没有 man 手册，检查 --help 输出
+    echo "警告：找不到命令 '$cmd' 的手册页"
+    help_output=$(get_command_help "$cmd")
+    
+    # 4. 检查 --help 输出结果
+    if [[ $? -eq 0 && -n "$help_output" ]]; then
+        # 5. 有 --help 输出，直接提示并询问
+        echo "发现 '$cmd --help' 输出信息"
+        read -p "是否使用 --help 输出进行翻译？[Y/n] " use_help
+        if [[ "$use_help" != "n" && "$use_help" != "N" ]]; then
+            echo "正在翻译 help 信息..."
+            translated_content=$(echo "$help_output" | python3 translate.py)
+            save_help_translated "$translated_content" "$cmd"
+            return 0
+        fi
+    else
+        # 6. 没有任何帮助信息
+        echo "错误：命令 '$cmd' 没有 man 手册也没有 --help 输出"
+        echo "可能的原因："
+        echo "1. 命令名称输入错误"
+        echo "2. 命令未正确安装"
+        echo "3. 需要特殊权限才能访问"
+        return 1
     fi
     
-    # 如果都没有找到
-    echo "错误：无法获取 '$cmd' 的帮助信息"
-    echo "该命令可能："
-    echo "1. 不提供帮助文档"
-    echo "2. 需要特殊权限才能访问"
-    echo "3. 命令名称输入错误"
-    echo
-    echo "建议："
-    echo "1. 检查命令名称是否正确"
-    echo "2. 尝试使用 sudo 运行"
-    echo "3. 查看命令的官方文档"
     return 1
 }
 
