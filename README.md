@@ -61,9 +61,9 @@ chmod +x manzh.sh config_manager.sh translate_man.sh clean.sh
 
 1. 下载并解压发布包：
 ```bash
-wget https://github.com/cksdxz1007/ManZH/releases/download/v1.0.1/manzh-1.0.1.tar.gz
-tar xzf manzh-1.0.1.tar.gz
-cd manzh-1.0.1
+wget https://github.com/cksdxz1007/ManZH/releases/download/v1.0.2/manzh-1.0.2.tar.gz
+tar xzf manzh-1.0.2.tar.gz
+cd manzh-1.0.2
 ```
 
 ## 使用方法
@@ -222,14 +222,19 @@ cynning
 
 ## 更新日志
 
+### v1.0.2
+- 修复翻译后的手册无法在列表中显示的问题
+- 修复 man 手册和 --help 输出的保存问题
+- 改进 --help 翻译的保存格式
+- 添加翻译文件保存路径的提示
+- 优化命令检查和错误提示逻辑
+
 ### v1.0.1
 - 添加对 --help 输出的翻译支持
 - 优化无 man 手册命令的处理
 - 改进翻译提示信息
 - 添加上下文长度和输出长度配置
 - 优化配置文件兼容性处理
-- 改进命令检查和错误提示逻辑
-- 支持不同翻译服务的参数自定义
 
 ### v1.0.0
 - 初始版本发布

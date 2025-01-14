@@ -73,20 +73,20 @@ function translate_content() {
 # 保存翻译后的手册
 function save_translated() {
     local content="$1"
-    local command=$2
-    local section=$3
-    local man_path="$TRANSLATED_DIR/man${section}"
+    local command="$2"
+    local section="${3:-1}"  # 默认保存到 man1
+    local man_path="/usr/local/share/man/zh_CN/man${section}"
     
     # 创建目录
     mkdir -p "$man_path"
     
-    # 保存为 nroff 格式
-    echo ".\\\" Translated by Man Page Translator" > "$man_path/${command}.${section}"
-    echo ".\\\" Original page from $(man -w ${section} ${command})" >> "$man_path/${command}.${section}"
-    echo "$content" >> "$man_path/${command}.${section}"
+    # 保存翻译结果
+    echo "$content" > "$man_path/${command}.${section}"
     
     # 设置正确的权限
     chmod 644 "$man_path/${command}.${section}"
+    
+    echo "翻译后的手册已保存到：$man_path/${command}.${section}"
 }
 
 # 显示进度条
@@ -168,7 +168,7 @@ function check_command() {
 function save_help_translated() {
     local content="$1"
     local command="$2"
-    local man_path="$TRANSLATED_DIR/man1"  # 帮助文档默认放在 man1 目录
+    local man_path="/usr/local/share/man/zh_CN/man1"  # 帮助文档默认放在 man1 目录
     
     # 创建目录
     mkdir -p "$man_path"
@@ -206,7 +206,8 @@ function process_command() {
     output=$(man "$cmd" 2>/dev/null)
     if [[ $? -eq 0 && -n "$output" ]]; then
         echo "正在翻译 man 手册..."
-        echo "$output" | col -b | python3 translate.py
+        translated_content=$(echo "$output" | col -b | python3 translate.py)
+        save_translated "$translated_content" "$cmd" "1"
         return 0
     fi
     

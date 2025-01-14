@@ -1,6 +1,6 @@
 #!/bin/bash
 
-VERSION="1.0.1"
+VERSION="1.0.2"
 PACKAGE_NAME="manzh-${VERSION}"
 
 # 创建打包目录
