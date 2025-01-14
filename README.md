@@ -35,7 +35,18 @@ git clone git@github.com:cksdxz1007/ManZH.git
 cd ManZH
 ```
 
-2. 安装依赖：
+2. 设置 MANPATH（可选）：
+```bash
+# 添加到 ~/.bashrc 或 ~/.zshrc
+export MANPATH="/usr/local/share/man/zh_CN:$MANPATH"
+
+# 使设置生效
+source ~/.bashrc  # 或 source ~/.zshrc
+```
+
+设置 MANPATH 后，可以直接使用 `man <命令>` 查看中文手册，无需指定 `-M` 参数。
+
+3. 安装依赖：
 
 在 macOS 上：
 ```bash
@@ -52,7 +63,7 @@ sudo apt install jq python3 python3-requests man-db groff
 sudo yum install jq python3 python3-requests man-db groff
 ```
 
-3. 添��执行权限：
+4. 添执行权限：
 ```bash
 chmod +x manzh.sh config_manager.sh translate_man.sh clean.sh
 ```
@@ -275,4 +286,22 @@ sudo apt install jq python3 python3-requests man-db groff
 
 # CentOS/RHEL
 sudo yum install jq python3 python3-requests man-db groff
+```
+
+查看翻译后的手册：
+
+方法一：使用 MANPATH（推荐）
+```bash
+# 设置过 MANPATH 后可以直接使用
+man ls
+```
+
+方法二：使用 -M 参数
+```bash
+man -M /usr/local/share/man/zh_CN <命令>
+```
+
+例如：
+```bash
+man -M /usr/local/share/man/zh_CN ls
 ```
