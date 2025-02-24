@@ -1,6 +1,7 @@
 #!/bin/bash
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VENV_DIR="$SCRIPT_DIR/venv"
 
 # 检查是否为 root 用户
 function check_root() {
@@ -46,6 +47,61 @@ function check_dependencies() {
         fi
         exit 1
     fi
+}
+
+# 检查是否在虚拟环境中
+function check_venv() {
+    if [[ -n "$VIRTUAL_ENV" ]]; then
+        if [[ "$VIRTUAL_ENV" == "$VENV_DIR" ]]; then
+            return 0  # 已在正确的虚拟环境中
+        else
+            echo "警告：当前在其他虚拟环境中"
+            echo "请先运行 'deactivate' 退出当前环境"
+            exit 1
+        fi
+    fi
+    return 1  # 不在虚拟环境中
+}
+
+# 提示选择 Python 环境
+function choose_python_env() {
+    # 如果已经在正确的虚拟环境中，直接返回
+    if [[ -n "$VIRTUAL_ENV" && "$VIRTUAL_ENV" == "$VENV_DIR" ]]; then
+        return 0
+    fi
+    
+    if [[ ! -f "$SCRIPT_DIR/venv/bin/activate" ]]; then
+        echo "警告：虚拟环境不存在，将使用系统 Python 环境"
+        return 1
+    fi
+    
+    echo
+    echo "Python 环境选择："
+    echo "1) 使用虚拟环境（推荐）"
+    echo "2) 使用系统 Python 环境"
+    echo
+    echo "虚拟环境的优势："
+    echo "- 避免依赖冲突"
+    echo "- 更好的隔离性"
+    echo "- 更容易管理依赖"
+    echo "- 不影响系统 Python 环境"
+    echo
+    
+    while true; do
+        read -p "请选择 [1/2]: " venv_choice
+        case $venv_choice in
+            1)
+                source "$VENV_DIR/bin/activate"
+                return 0
+                ;;
+            2)
+                return 1
+                ;;
+            *)
+                echo "请输入 1 或 2"
+                ;;
+        esac
+    done
 }
 
 # 列出已翻译的手册
@@ -187,6 +243,9 @@ function main() {
     # 检查依赖
     check_dependencies
     
+    # 选择或确认 Python 环境
+    choose_python_env
+    
     # 如果有命令行参数，使用命令行模式
     if [[ $# -gt 0 ]]; then
         case "$1" in
@@ -225,6 +284,11 @@ function main() {
     else
         # 没有参数时启动交互式界面
         show_menu
+    fi
+    
+    # 如果在虚拟环境中，退出时自动退出虚拟环境
+    if [[ -n "$VIRTUAL_ENV" ]]; then
+        deactivate
     fi
 }
 

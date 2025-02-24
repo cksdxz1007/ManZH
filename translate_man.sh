@@ -67,7 +67,20 @@ function preprocess_content() {
 # 调用翻译程序
 function translate_content() {
     local content="$1"
-    echo "$content" | python3 translate.py
+    local translated_content
+    
+    # 使用管道调用 Python 翻译程序，并捕获返回值
+    translated_content=$(echo "$content" | python3 translate.py)
+    local exit_code=$?
+    
+    # 检查翻译是否成功
+    if [[ $exit_code -ne 0 ]] || [[ -z "$translated_content" ]]; then
+        echo "翻译失败，不保存结果" >&2
+        return 1
+    fi
+    
+    echo "$translated_content"
+    return 0
 }
 
 # 保存翻译后的手册
@@ -76,6 +89,12 @@ function save_translated() {
     local command="$2"
     local section="${3:-1}"  # 默认保存到 man1
     local man_path="/usr/local/share/man/zh_CN/man${section}"
+    
+    # 检查内容是否为空
+    if [[ -z "$content" ]]; then
+        echo "错误：翻译内容为空，不保存结果" >&2
+        return 1
+    fi
     
     # 创建目录
     mkdir -p "$man_path"
@@ -87,6 +106,7 @@ function save_translated() {
     chmod 644 "$man_path/${command}.${section}"
     
     echo "翻译后的手册已保存到：$man_path/${command}.${section}"
+    return 0
 }
 
 # 显示进度条
@@ -170,6 +190,12 @@ function save_help_translated() {
     local command="$2"
     local man_path="/usr/local/share/man/zh_CN/man1"  # 帮助文档默认放在 man1 目录
     
+    # 检查内容是否为空
+    if [[ -z "$content" ]]; then
+        echo "错误：翻译内容为空，不保存结果" >&2
+        return 1
+    fi
+    
     # 创建目录
     mkdir -p "$man_path"
     
@@ -188,6 +214,7 @@ EOF
     chmod 644 "$man_path/${command}.1"
     
     echo "翻译后的帮助文档已保存到：$man_path/${command}.1"
+    return 0
 }
 
 # 修改主处理函数
@@ -195,6 +222,7 @@ function process_command() {
     local cmd="$1"
     local output=""
     local help_output=""
+    local translated_content=""
     
     # 1. 检查命令是否存在
     if ! command -v "$cmd" &> /dev/null; then
@@ -206,9 +234,14 @@ function process_command() {
     output=$(man "$cmd" 2>/dev/null)
     if [[ $? -eq 0 && -n "$output" ]]; then
         echo "正在翻译 man 手册..."
-        translated_content=$(echo "$output" | col -b | python3 translate.py)
-        save_translated "$translated_content" "$cmd" "1"
-        return 0
+        translated_content=$(echo "$output" | col -b | translate_content)
+        if [[ $? -eq 0 && -n "$translated_content" ]]; then
+            save_translated "$translated_content" "$cmd" "1"
+            return $?
+        else
+            echo "翻译失败，请检查日志并重试"
+            return 1
+        fi
     fi
     
     # 3. 如果没有 man 手册，检查 --help 输出
@@ -222,9 +255,14 @@ function process_command() {
         read -p "是否使用 --help 输出进行翻译？[Y/n] " use_help
         if [[ "$use_help" != "n" && "$use_help" != "N" ]]; then
             echo "正在翻译 help 信息..."
-            translated_content=$(echo "$help_output" | python3 translate.py)
-            save_help_translated "$translated_content" "$cmd"
-            return 0
+            translated_content=$(echo "$help_output" | translate_content)
+            if [[ $? -eq 0 && -n "$translated_content" ]]; then
+                save_help_translated "$translated_content" "$cmd"
+                return $?
+            else
+                echo "翻译失败，请检查日志并重试"
+                return 1
+            fi
         fi
     else
         # 6. 没有任何帮助信息

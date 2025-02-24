@@ -41,6 +41,13 @@ function read_config() {
     if echo "$config" | jq -e '.services' > /dev/null 2>&1; then
         local services=($(echo "$config" | jq -r '.services | keys[]'))
         for service in "${services[@]}"; do
+            # 检查是否缺少服务类型
+            if ! echo "$config" | jq -e ".services.\"$service\".type" > /dev/null 2>&1; then
+                echo "注意：服务 '$service' 缺少类型设置，将设为 chatgpt"
+                config=$(echo "$config" | jq ".services.\"$service\".type = \"chatgpt\"")
+                needs_upgrade=true
+            fi
+            
             # 检查是否缺少上下文长度设置
             if ! echo "$config" | jq -e ".services.\"$service\".max_context_length" > /dev/null 2>&1; then
                 echo "注意：服务 '$service' 缺少上下文长度设置，将使用默认值"
@@ -86,7 +93,7 @@ function interactive_add_service() {
     
     # 输入服务名称
     while true; do
-        read -p "请输入服务名称（如 openai, deepseek）: " service_name
+        read -p "请输入服务名称（如 openai, deepseek, gemini）: " service_name
         if [[ -z "$service_name" ]]; then
             echo "服务名称不能为空"
             continue
@@ -100,6 +107,19 @@ function interactive_add_service() {
         break
     done
     
+    # 选择服务类型
+    echo "选择服务类型："
+    echo "1) ChatGPT 兼容接口（OpenAI/DeepSeek/Ollama等）"
+    echo "2) Google Gemini"
+    while true; do
+        read -p "请选择 [1-2]: " type_choice
+        case $type_choice in
+            1) service_type="chatgpt"; break;;
+            2) service_type="gemini"; break;;
+            *) echo "请选择有效的选项";;
+        esac
+    done
+    
     # 输入 API 密钥
     while true; do
         read -p "请输入 API 密钥: " api_key
@@ -111,20 +131,41 @@ function interactive_add_service() {
     done
     
     # 选择预设 API 地址或自定义
-    echo "选择 API 地址："
-    echo "1) OpenAI (https://api.openai.com/v1/chat/completions)"
-    echo "2) DeepSeek (https://api.deepseek.com/v1/chat/completions)"
-    echo "3) 自定义"
-    while true; do
-        read -p "请选择 [1-3]: " url_choice
-        case $url_choice in
-            1) url="https://api.openai.com/v1/chat/completions"; break;;
-            2) url="https://api.deepseek.com/v1/chat/completions"; break;;
-            3) read -p "请输入自定义 API 地址: " url; 
-               if [[ -n "$url" ]]; then break; fi;;
-            *) echo "请选择有效的选项";;
-        esac
-    done
+    if [[ "$service_type" == "chatgpt" ]]; then
+        echo "选择 API 地址："
+        echo "1) OpenAI (api.openai.com)"
+        echo "2) DeepSeek (api.deepseek.com)"
+        echo "3) 自定义"
+        while true; do
+            read -p "请选择 [1-3]: " url_choice
+            case $url_choice in
+                1) url="https://api.openai.com"; break;;
+                2) url="https://api.deepseek.com"; break;;
+                3) read -p "请输入 API 域名（如 api.example.com）: " domain
+                   echo
+                   echo "说明：对于 ChatGPT 兼容接口，您只需要输入 API 域名部分。"
+                   echo "系统会自动添加 'https://' 前缀和 '/v1/chat/completions' 路径。"
+                   echo
+                   echo "示例："
+                   echo "✓ api.openai.com"
+                   echo "✓ api.deepseek.com"
+                   echo "✓ api.moonshot.cn"
+                   echo "✗ https://api.openai.com/v1/chat/completions"
+                   echo "✗ http://localhost:11434"
+                   echo
+                   read -p "请输入 API 域名: " domain
+                   if [[ -n "$domain" ]]; then
+                       # 移除可能的协议前缀和尾部斜杠
+                       domain=$(echo "$domain" | sed -E 's#^(https?://)?##' | sed 's#/$##')
+                       url="https://$domain"
+                       break
+                   fi;;
+                *) echo "请选择有效的选项";;
+            esac
+        done
+        # 添加统一的路径
+        url="${url}/v1/chat/completions"
+    fi
     
     # 选择预设模型或自定义
     echo "选择模型："
@@ -190,8 +231,11 @@ function interactive_add_service() {
     echo
     echo "请确认以下信息："
     echo "服务名称: $service_name"
+    echo "服务类型: $service_type"
     echo "API 密钥: $api_key"
-    echo "API 地址: $url"
+    if [[ "$service_type" != "gemini" ]]; then
+        echo "API 地址: $url"
+    fi
     echo "模型名称: $model"
     echo "上下文长度: $context_length"
     echo "输出长度: $output_length"
@@ -204,15 +248,30 @@ function interactive_add_service() {
     
     # 更新配置保存
     local config=$(read_config)
-    config=$(echo "$config" | jq ".services.\"$service_name\" = {
-        \"service\": \"$service_name\",
-        \"api_key\": \"$api_key\",
-        \"url\": \"$url\",
-        \"model\": \"$model\",
-        \"language\": \"zh-CN\",
-        \"max_context_length\": $context_length,
-        \"max_output_length\": $output_length
-    }")
+    
+    # 根据服务类型创建不同的配置
+    if [[ "$service_type" == "gemini" ]]; then
+        config=$(echo "$config" | jq ".services.\"$service_name\" = {
+            \"type\": \"gemini\",
+            \"service\": \"$service_name\",
+            \"api_key\": \"$api_key\",
+            \"model\": \"$model\",
+            \"language\": \"zh-CN\",
+            \"max_context_length\": $context_length,
+            \"max_output_length\": $output_length
+        }")
+    else
+        config=$(echo "$config" | jq ".services.\"$service_name\" = {
+            \"type\": \"chatgpt\",
+            \"service\": \"$service_name\",
+            \"api_key\": \"$api_key\",
+            \"url\": \"$url\",
+            \"model\": \"$model\",
+            \"language\": \"zh-CN\",
+            \"max_context_length\": $context_length,
+            \"max_output_length\": $output_length
+        }")
+    fi
     
     # 如果是第一个服务，设为默认
     if [[ $(echo "$config" | jq '.default_service') == "null" ]]; then
@@ -295,7 +354,8 @@ function interactive_update_service() {
     # 显示服务列表
     echo "选择要更新的服务："
     for i in "${!services[@]}"; do
-        echo "$((i+1))) ${services[$i]}"
+        local service_type=$(echo "$config" | jq -r ".services.\"${services[$i]}\".type")
+        echo "$((i+1))) ${services[$i]} ($service_type)"
     done
     
     # 选择服务
@@ -308,60 +368,162 @@ function interactive_update_service() {
         echo "请输入有效的选项"
     done
     
+    # 获取当前服务类型
+    current_type=$(echo "$config" | jq -r ".services.\"$service_name\".type")
+    
     # 选择要更新的字段
     echo "选择要更新的配置项："
-    echo "1) API 密钥"
-    echo "2) API 地址"
-    echo "3) 模型名称"
-    echo "4) 语言设置"
-    echo "5) 上下文长度"
-    echo "6) 输出长度"
+    echo "1) 服务类型"
+    echo "2) API 密钥"
+    if [[ "$current_type" != "gemini" ]]; then
+        echo "3) API 地址"
+    fi
+    echo "4) 模型名称"
+    echo "5) 语言设置"
+    echo "6) 上下文长度"
+    echo "7) 输出长度"
     
     while true; do
-        read -p "请选择 [1-6]: " field_choice
+        read -p "请选择 [1-7]: " field_choice
         case $field_choice in
-            1) field="api_key"
+            1) field="type"
+               echo "选择服务类型："
+               echo "1) ChatGPT 兼容接口"
+               echo "2) Google Gemini"
+               while true; do
+                   read -p "请选择 [1-2]: " type_choice
+                   case $type_choice in
+                       1) value="chatgpt"
+                          # 如果从 Gemini 切换到 ChatGPT，需要添加 URL
+                          if [[ "$current_type" == "gemini" ]]; then
+                              echo "选择 API 地址："
+                              echo "1) OpenAI (api.openai.com)"
+                              echo "2) DeepSeek (api.deepseek.com)"
+                              echo "3) 自定义"
+                              while true; do
+                                  read -p "请选择 [1-3]: " url_choice
+                                  case $url_choice in
+                                      1) url="https://api.openai.com"; break;;
+                                      2) url="https://api.deepseek.com"; break;;
+                                      3) read -p "请输入 API 域名（如 api.example.com）: " domain
+                                         echo
+                                         echo "说明：对于 ChatGPT 兼容接口，您只需要输入 API 域名部分。"
+                                         echo "系统会自动添加 'https://' 前缀和 '/v1/chat/completions' 路径。"
+                                         echo
+                                         echo "示例："
+                                         echo "✓ api.openai.com"
+                                         echo "✓ api.deepseek.com"
+                                         echo "✓ api.moonshot.cn"
+                                         echo "✗ https://api.openai.com/v1/chat/completions"
+                                         echo "✗ http://localhost:11434"
+                                         echo
+                                         read -p "请输入 API 域名: " domain
+                                         if [[ -n "$domain" ]]; then
+                                             # 移除可能的协议前缀和尾部斜杠
+                                             domain=$(echo "$domain" | sed -E 's#^(https?://)?##' | sed 's#/$##')
+                                             url="https://$domain"
+                                             break
+                                         fi;;
+                                      *) echo "请选择有效的选项";;
+                                  esac
+                              done
+                              # 添加统一的路径
+                              url="${url}/v1/chat/completions"
+                          fi
+                          break;;
+                       2) value="gemini"
+                          # 如果从 ChatGPT 切换到 Gemini，需要删除 URL
+                          if [[ "$current_type" != "gemini" ]]; then
+                              config=$(echo "$config" | jq "del(.services.\"$service_name\".url)")
+                          fi
+                          break;;
+                       *) echo "请选择有效的选项";;
+                   esac
+               done
+               ;;
+            2) field="api_key"
                read -p "请输入新的 API 密钥: " value
                ;;
-            2) field="url"
-               echo "选择 API 地址："
-               echo "1) OpenAI (https://api.openai.com/v1/chat/completions)"
-               echo "2) DeepSeek (https://api.deepseek.com/v1/chat/completions)"
-               echo "3) 自定义"
-               while true; do
-                   read -p "请选择 [1-3]: " url_choice
-                   case $url_choice in
-                       1) value="https://api.openai.com/v1/chat/completions"; break;;
-                       2) value="https://api.deepseek.com/v1/chat/completions"; break;;
-                       3) read -p "请输入自定义 API 地址: " value; 
-                          if [[ -n "$value" ]]; then break; fi;;
-                       *) echo "请选择有效的选项";;
-                   esac
-               done
+            3) if [[ "$current_type" != "gemini" ]]; then
+                   field="url"
+                   echo "选择 API 地址："
+                   echo "1) OpenAI (api.openai.com)"
+                   echo "2) DeepSeek (api.deepseek.com)"
+                   echo "3) 自定义"
+                   while true; do
+                       read -p "请选择 [1-3]: " url_choice
+                       case $url_choice in
+                           1) value="https://api.openai.com"; break;;
+                           2) value="https://api.deepseek.com"; break;;
+                           3) read -p "请输入 API 域名（如 api.example.com）: " domain
+                              echo
+                              echo "说明：对于 ChatGPT 兼容接口，您只需要输入 API 域名部分。"
+                              echo "系统会自动添加 'https://' 前缀和 '/v1/chat/completions' 路径。"
+                              echo
+                              echo "示例："
+                              echo "✓ api.openai.com"
+                              echo "✓ api.deepseek.com"
+                              echo "✓ api.moonshot.cn"
+                              echo "✗ https://api.openai.com/v1/chat/completions"
+                              echo "✗ http://localhost:11434"
+                              echo
+                              read -p "请输入 API 域名: " domain
+                              if [[ -n "$domain" ]]; then
+                                  # 移除可能的协议前缀和尾部斜杠
+                                  domain=$(echo "$domain" | sed -E 's#^(https?://)?##' | sed 's#/$##')
+                                  value="https://$domain"
+                                  break
+                              fi;;
+                           *) echo "请选择有效的选项";;
+                       esac
+                   done
+                   # 添加统一的路径
+                   value="${value}/v1/chat/completions"
+               else
+                   echo "Gemini 服务不需要 API 地址"
+                   continue
+               fi
                ;;
-            3) field="model"
-               echo "选择模型："
-               echo "1) GPT-4"
-               echo "2) GPT-3.5-turbo"
-               echo "3) DeepSeek-chat"
-               echo "4) 自定义"
-               while true; do
-                   read -p "请选择 [1-4]: " model_choice
-                   case $model_choice in
-                       1) value="gpt-4"; break;;
-                       2) value="gpt-3.5-turbo"; break;;
-                       3) value="deepseek-chat"; break;;
-                       4) read -p "请输入自定义模型名称: " value;
-                          if [[ -n "$value" ]]; then break; fi;;
-                       *) echo "请选择有效的选项";;
-                   esac
-               done
+            4) field="model"
+               if [[ "$current_type" == "gemini" ]]; then
+                   echo "选择 Gemini 模型："
+                   echo "1) gemini-pro"
+                   echo "2) gemini-2.0-flash-exp"
+                   echo "3) 自定义"
+                   while true; do
+                       read -p "请选择 [1-3]: " model_choice
+                       case $model_choice in
+                           1) value="gemini-pro"; break;;
+                           2) value="gemini-2.0-flash-exp"; break;;
+                           3) read -p "请输入自定义模型名称: " value;
+                              if [[ -n "$value" ]]; then break; fi;;
+                           *) echo "请选择有效的选项";;
+                       esac
+                   done
+               else
+                   echo "选择模型："
+                   echo "1) GPT-4"
+                   echo "2) GPT-3.5-turbo"
+                   echo "3) DeepSeek-chat"
+                   echo "4) 自定义"
+                   while true; do
+                       read -p "请选择 [1-4]: " model_choice
+                       case $model_choice in
+                           1) value="gpt-4"; break;;
+                           2) value="gpt-3.5-turbo"; break;;
+                           3) value="deepseek-chat"; break;;
+                           4) read -p "请输入自定义模型名称: " value;
+                              if [[ -n "$value" ]]; then break; fi;;
+                           *) echo "请选择有效的选项";;
+                       esac
+                   done
+               fi
                ;;
-            4) field="language"
+            5) field="language"
                read -p "请输入语言代码 (默认 zh-CN): " value
                value=${value:-zh-CN}
                ;;
-            5) field="max_context_length"
+            6) field="max_context_length"
                echo "设置上下文长度（字符数）："
                echo "1) 4K  (4096)"
                echo "2) 8K  (8192)"
@@ -382,7 +544,7 @@ function interactive_update_service() {
                    esac
                done
                ;;
-            6) field="max_output_length"
+            7) field="max_output_length"
                echo "设置最大输出长度（字符数）："
                echo "1) 2K  (2048)"
                echo "2) 4K  (4096)"
@@ -425,6 +587,12 @@ function interactive_update_service() {
     else
         config=$(echo "$config" | jq ".services.\"$service_name\".\"$field\" = \"$value\"")
     fi
+    
+    # 如果更新了类型为 chatgpt 并且需要添加 URL
+    if [[ "$field" == "type" && "$value" == "chatgpt" && -n "$url" ]]; then
+        config=$(echo "$config" | jq ".services.\"$service_name\".url = \"$url\"")
+    fi
+    
     save_config "$config"
     echo "服务 '$service_name' 的 '$field' 已更新"
 }
@@ -484,8 +652,8 @@ function list_services() {
     
     # 显示服务列表
     for service in "${services[@]}"; do
+        local service_type=$(echo "$config" | jq -r ".services.\"$service\".type")
         local api_key=$(echo "$config" | jq -r ".services.\"$service\".api_key")
-        local url=$(echo "$config" | jq -r ".services.\"$service\".url")
         local model=$(echo "$config" | jq -r ".services.\"$service\".model")
         local context_length=$(echo "$config" | jq -r ".services.\"$service\".max_context_length")
         local output_length=$(echo "$config" | jq -r ".services.\"$service\".max_output_length")
@@ -495,7 +663,11 @@ function list_services() {
         else
             echo "  $service"
         fi
-        echo "    API 地址: $url"
+        echo "    服务类型: $service_type"
+        if [[ "$service_type" != "gemini" ]]; then
+            local url=$(echo "$config" | jq -r ".services.\"$service\".url")
+            echo "    API 地址: $url"
+        fi
         echo "    模型: $model"
         echo "    API 密钥: ${api_key:0:8}..."
         echo "    上下文长度: $context_length"
@@ -517,9 +689,13 @@ function get_default_service() {
     fi
     
     local service_config=$(echo "$config" | jq -r ".services.\"$default_service\"")
+    local service_type=$(echo "$service_config" | jq -r '.type')
     
     echo "服务名称: $default_service"
-    echo "API 地址: $(echo "$service_config" | jq -r '.url')"
+    echo "服务类型: $service_type"
+    if [[ "$service_type" != "gemini" ]]; then
+        echo "API 地址: $(echo "$service_config" | jq -r '.url')"
+    fi
     echo "模型: $(echo "$service_config" | jq -r '.model')"
     echo "API 密钥: $(echo "$service_config" | jq -r '.api_key' | cut -c1-8)..."
     echo "语言: $(echo "$service_config" | jq -r '.language')"
