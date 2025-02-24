@@ -138,35 +138,11 @@ function show_version() {
 
 # 清理翻译
 function interactive_clean() {
-    echo "=== 清理已翻译的手册 ==="
+    echo "=== 清理翻译手册 ==="
     echo
     
-    # 检查是否有翻译
-    if [[ ! -d "/usr/local/share/man/zh_CN" ]]; then
-        echo "当前没有任何已翻译的手册"
-        echo
-        echo "按回车键返回主菜单..."
-        read
-        return
-    fi
-    
-    # 显示当前已翻译的数量
-    local count=$(find /usr/local/share/man/zh_CN -type f | wc -l)
-    echo "当前已翻译 $count 个手册页"
-    echo
-    
-    # 确认清理
-    read -p "确定要清理所有已翻译的手册吗？[y/N] " confirm
-    if [[ "$confirm" == "y" || "$confirm" == "Y" ]]; then
-        check_root
-        "$SCRIPT_DIR/clean.sh"
-    else
-        echo "已取消清理"
-    fi
-    
-    echo
-    echo "按回车键返回主菜单..."
-    read
+    # 直接调用 clean.sh 的菜单
+    "$SCRIPT_DIR/clean.sh"
 }
 
 # 显示主菜单
@@ -191,7 +167,10 @@ EOF
             1) interactive_translate;;
             2) "$SCRIPT_DIR/config_manager.sh";;
             3) list_translated;;
-            4) interactive_clean;;
+            4) 
+                check_root
+                interactive_clean
+                ;;
             5) show_version;;
             0) exit 0;;
             *) 
