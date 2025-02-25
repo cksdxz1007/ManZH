@@ -21,7 +21,7 @@
 
 - Linux/Unix 操作系统或 macOS
 - Python 3.x
-- 以下依赖包：
+- 以下依赖包（安装脚本会自动安装）：
   - jq
   - python3-requests
   - man
@@ -29,24 +29,61 @@
 
 ## 安装
 
+### 推荐方法：使用安装脚本
+
 1. 克隆仓库：
 ```bash
 git clone git@github.com:cksdxz1007/ManZH.git
 cd ManZH
 ```
 
-2. 设置 MANPATH（可选）：
+2. 运行安装脚本：
 ```bash
-# 添加到 ~/.bashrc 或 ~/.zshrc
-export MANPATH="/usr/local/share/man/zh_CN:$MANPATH"
-
-# 使设置生效
-source ~/.bashrc  # 或 source ~/.zshrc
+sudo ./install.sh
 ```
 
-设置 MANPATH 后，可以直接使用 `man <命令>` 查看中文手册，无需指定 `-M` 参数。
+安装脚本会自动完成以下操作：
+- 检查系统兼容性
+- 安装所需依赖
+- 设置 Python 环境（系统环境或虚拟环境）
+- 创建必要目录
+- 配置 MANPATH 环境变量
+- 创建命令链接
 
-3. 安装依赖：
+#### 安装选项
+
+安装脚本会提示您选择 Python 环境：
+```bash
+Python 环境选择：
+1) 使用虚拟环境（推荐）
+2) 使用系统 Python 环境
+```
+
+选择虚拟环境安装的优势：
+- 避免与系统 Python 包冲突
+- 更容易管理依赖
+- 可以使用 `manzh-activate` 命令激活环境
+
+#### 安装后的验证
+
+安装完成后，可以通过以下方式验证安装：
+
+```bash
+# 检查命令是否可用
+which manzh
+
+# 检查虚拟环境
+ls -la /usr/local/manzh/venv
+
+# 检查配置文件
+cat /usr/local/manzh/config.json
+```
+
+### 手动安装（高级用户）
+
+如果您不想使用安装脚本，也可以手动安装：
+
+1. 安装依赖：
 
 在 macOS 上：
 ```bash
@@ -63,60 +100,42 @@ sudo apt install jq python3 python3-requests man-db groff
 sudo yum install jq python3 python3-requests man-db groff
 ```
 
-4. 添执行权限：
+2. 添加执行权限：
 ```bash
 chmod +x manzh.sh config_manager.sh translate_man.sh clean.sh
 ```
 
-### 方法一：使用安装脚本
-
-1. 下载并解压发布包：
+3. 设置 MANPATH（可选）：
 ```bash
-wget https://github.com/cksdxz1007/ManZH/releases/download/v1.0.2/manzh-1.0.2.tar.gz
-tar xzf manzh-1.0.2.tar.gz
-cd manzh-1.0.2
+# 添加到 ~/.bashrc 或 ~/.zshrc
+export MANPATH="/usr/local/share/man/zh_CN:$MANPATH"
+
+# 使设置生效
+source ~/.bashrc  # 或 source ~/.zshrc
 ```
 
-## 安装选项详解
-
-使用安装脚本时，您可以选择以下安装方式：
-
-### 虚拟环境安装（推荐）
-
-安装脚本会提示您选择是否使用虚拟环境：
+4. 创建必要目录：
 ```bash
-Python 环境选择：
-1) 使用虚拟环境（推荐）
-2) 使用系统 Python 环境
-```
-
-选择虚拟环境安装的优势：
-- 避免与系统 Python 包冲突
-- 更容易管理依赖
-- 可以使用 `manzh-activate` 命令激活环境
-
-### 安装后的验证
-
-安装完成后，可以通过以下方式验证安装：
-
-```bash
-# 检查命令是否可用
-which manzh
-
-# 检查虚拟环境
-ls -la /usr/local/manzh/venv
-
-# 检查配置文件
-cat /usr/local/manzh/config.json
+sudo mkdir -p /usr/local/manzh /usr/local/share/man/zh_CN
 ```
 
 ## 使用方法
+
+### 首次使用配置
+
+安装完成后，首次使用前需要配置至少一个翻译服务：
+
+```bash
+manzh config
+```
+
+按照提示添加翻译服务（如 OpenAI、DeepSeek、Ollama 等）。
 
 ### 交互式界面
 
 直接运行主程序：
 ```bash
-sudo ./manzh.sh
+manzh
 ```
 
 将显示交互式菜单，包含以下选项：
@@ -130,27 +149,27 @@ sudo ./manzh.sh
 
 1. 翻译命令手册：
 ```bash
-sudo ./manzh.sh translate ls
+manzh translate ls
 ```
 
 2. 配置翻译服务：
 ```bash
-./manzh.sh config
+manzh config
 ```
 
 3. 查看已翻译手册：
 ```bash
-./manzh.sh list
+manzh list
 ```
 
 4. 清理已翻译手册：
 ```bash
-sudo ./manzh.sh clean
+manzh clean
 ```
 
 ### 虚拟环境使用
 
-ManZH 支持在虚拟环境中运行，以避免依赖冲突：
+如果您在安装时选择了虚拟环境，需要先激活环境：
 
 1. 激活虚拟环境：
    ```bash
@@ -178,14 +197,19 @@ ManZH 支持在虚拟环境中运行，以避免依赖冲突：
 支持多种翻译服务，可以通过配置管理工具进行管理：
 
 ```bash
-./manzh.sh config
+manzh config
 ```
 
 支持的服务：
+
+### 1. OpenAI 兼容接口类型
 - OpenAI (GPT-4, GPT-3.5-turbo)
 - DeepSeek
 - Ollama (本地模型)
-- 其他兼容的服务
+- 任何兼容 OpenAI API 格式的服务
+
+### 2. Google Gemini 类型
+- Google Gemini (gemini-2.0-flash-exp 等模型)
 
 配置示例：
 ```json
@@ -265,7 +289,7 @@ man -M /usr/local/share/man/zh_CN ls
 注：对于没有 man 手册的命令（如 conda），ManZH 会自动尝试翻译 --help 输出：
 ```bash
 # 翻译 conda 命令的帮助信息
-sudo ./manzh.sh translate conda
+manzh translate conda
 
 # 查看翻译结果
 man -M /usr/local/share/man/zh_CN conda
@@ -319,7 +343,7 @@ man -M /usr/local/share/man/zh_CN conda
 ## 故障排除
 
 1. 如果遇到权限问题：
-   - 确保使用 sudo 运行涉及文件系统操作的命令
+   - 确保使用 sudo 运行安装脚本和涉及文件系统操作的命令
 
 2. 如果翻译服务无响应：
    - 检查网络连接
@@ -345,7 +369,7 @@ COMMANDS=(
 
 for cmd in "${COMMANDS[@]}"; do
   echo "正在翻译: $cmd"
-  sudo ./manzh.sh translate "$cmd"
+  manzh translate "$cmd"
   echo "-------------------"
 done
 ```
@@ -375,7 +399,7 @@ TRANSLATED=$(find /usr/local/share/man/zh_CN -type f -name "*.1" | xargs -n1 bas
 # 重新翻译所有命令
 for cmd in $TRANSLATED; do
   echo "更新翻译: $cmd"
-  sudo ./manzh.sh translate "$cmd"
+  manzh translate "$cmd"
 done
 ```
 
@@ -493,6 +517,8 @@ cynning
 - 支持主流发行版（Ubuntu、Debian、CentOS、RHEL 等）
 
 ## 安装依赖
+
+安装脚本会自动安装所需依赖，但如果您选择手动安装，可以参考以下命令：
 
 ### macOS
 ```bash
