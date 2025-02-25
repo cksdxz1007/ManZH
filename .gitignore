@@ -17,4 +17,7 @@ build/
 .DS_Store
 
 # 部署脚本
-deploy.sh 
+deploy.sh
+
+# 视频脚本
+video_script.md 
