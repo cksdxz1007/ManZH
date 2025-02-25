@@ -77,6 +77,39 @@ tar xzf manzh-1.0.2.tar.gz
 cd manzh-1.0.2
 ```
 
+## 安装选项详解
+
+使用安装脚本时，您可以选择以下安装方式：
+
+### 虚拟环境安装（推荐）
+
+安装脚本会提示您选择是否使用虚拟环境：
+```bash
+Python 环境选择：
+1) 使用虚拟环境（推荐）
+2) 使用系统 Python 环境
+```
+
+选择虚拟环境安装的优势：
+- 避免与系统 Python 包冲突
+- 更容易管理依赖
+- 可以使用 `manzh-activate` 命令激活环境
+
+### 安装后的验证
+
+安装完成后，可以通过以下方式验证安装：
+
+```bash
+# 检查命令是否可用
+which manzh
+
+# 检查虚拟环境
+ls -la /usr/local/manzh/venv
+
+# 检查配置文件
+cat /usr/local/manzh/config.json
+```
+
 ## 使用方法
 
 ### 交互式界面
@@ -115,6 +148,31 @@ sudo ./manzh.sh translate ls
 sudo ./manzh.sh clean
 ```
 
+### 虚拟环境使用
+
+ManZH 支持在虚拟环境中运行，以避免依赖冲突：
+
+1. 激活虚拟环境：
+   ```bash
+   source manzh-activate
+   ```
+
+2. 在虚拟环境中使用 ManZH：
+   ```bash
+   manzh translate ls
+   ```
+
+3. 退出虚拟环境：
+   ```bash
+   deactivate
+   ```
+
+虚拟环境的优势：
+- 避免依赖冲突
+- 更好的隔离性
+- 更容易管理依赖
+- 不影响系统 Python 环境
+
 ## 配置翻译服务
 
 支持多种翻译服务，可以通过配置管理工具进行管理：
@@ -148,6 +206,42 @@ sudo ./manzh.sh clean
     "max_context_length": 4096,
     "max_output_length": 2048
   }
+}
+```
+
+## 配置文件详解
+
+ManZH 的配置文件 `config.json` 包含以下主要部分：
+
+### 服务配置
+
+每个翻译服务的配置包含以下字段：
+
+| 字段 | 说明 | 示例值 |
+|------|------|--------|
+| type | 服务类型 | "chatgpt" 或 "gemini" |
+| service | 服务名称 | "openai", "deepseek", "ollama", "gemini" |
+| api_key | API 密钥 | "sk-abcdef123456" |
+| url | API 端点 | "https://api.openai.com/v1/chat/completions" |
+| model | 模型名称 | "gpt-4", "deepseek-chat", "gemini-2.0-flash-exp" |
+| language | 目标语言 | "zh-CN" |
+| max_context_length | 上下文最大长度 | 8192 |
+| max_output_length | 输出最大长度 | 4096 |
+
+### 本地模型配置 (Ollama)
+
+使用 Ollama 本地模型的配置示例：
+
+```json
+"ollama": {
+  "type": "chatgpt",
+  "service": "ollama",
+  "api_key": "123",  // 可以是任意值
+  "url": "http://localhost:11434/v1/chat/completions",
+  "model": "qwen2.5:7b",  // 使用已下载的模型名称
+  "language": "zh-CN",
+  "max_context_length": 4096,
+  "max_output_length": 2048
 }
 ```
 
@@ -198,6 +292,30 @@ man -M /usr/local/share/man/zh_CN conda
 4. 建议在网络稳定的环境下使用
 5. 注意 API 使用配额限制
 
+## 常见问题与解决方案
+
+### 翻译失败但仍保存了空文件
+
+**症状**：翻译过程报错，但系统仍然提示翻译结果已保存
+**解决方案**：
+- 升级到 v1.0.4 或更高版本，此问题已修复
+- 手动删除可能存在的空文件：`sudo rm /usr/local/share/man/zh_CN/man1/<命令>.1`
+
+### 虚拟环境兼容性问题
+
+**症状**：使用 `manzh-activate` 激活环境后，运行 `manzh.sh` 提示"当前在其他虚拟环境中"
+**解决方案**：
+- 升级到 v1.0.4 或更高版本，此问题已修复
+- 或使用 `deactivate` 退出当前环境后再运行
+
+### 翻译服务 API 错误
+
+**症状**：翻译过程中出现 API 相关错误，如 "User location is not supported" 或 "Resource has been exhausted"
+**解决方案**：
+- 检查 API 密钥是否正确
+- 尝试切换到其他翻译服务，如 DeepSeek 或 Ollama
+- 检查 API 使用配额和区域限制
+
 ## 故障排除
 
 1. 如果遇到权限问题：
@@ -212,8 +330,78 @@ man -M /usr/local/share/man/zh_CN conda
    - 尝试清理后重新翻译
    - 检查原始手册格式
 
-## 贡献指南 man conda
-No manual entry for conda
+## 高级使用技巧
+
+### 批量翻译常用命令
+
+创建一个脚本批量翻译常用命令：
+
+```bash
+#!/bin/bash
+COMMANDS=(
+  "ls" "cd" "grep" "find" "awk" "sed"
+  "tar" "cp" "mv" "rm" "mkdir" "chmod"
+)
+
+for cmd in "${COMMANDS[@]}"; do
+  echo "正在翻译: $cmd"
+  sudo ./manzh.sh translate "$cmd"
+  echo "-------------------"
+done
+```
+
+### 集成到系统 man 命令
+
+在 `~/.bashrc` 或 `~/.zshrc` 中添加以下函数：
+
+```bash
+# 优先使用中文手册，如果没有则使用英文手册
+function man() {
+  LANG=zh_CN command man -M /usr/local/share/man/zh_CN "$@" 2>/dev/null || command man "$@"
+}
+```
+
+### 自动更新翻译
+
+创建定期更新脚本：
+
+```bash
+#!/bin/bash
+# 保存为 update-manzh.sh
+
+# 获取已翻译的命令列表
+TRANSLATED=$(find /usr/local/share/man/zh_CN -type f -name "*.1" | xargs -n1 basename | sed 's/\.1$//')
+
+# 重新翻译所有命令
+for cmd in $TRANSLATED; do
+  echo "更新翻译: $cmd"
+  sudo ./manzh.sh translate "$cmd"
+done
+```
+
+## 性能优化建议
+
+### 翻译大型手册
+
+对于特别大的手册页（如 bash、gcc），可以考虑：
+
+1. 增加配置中的上下文长度和输出长度：
+   ```json
+   "max_context_length": 16384,
+   "max_output_length": 8192
+   ```
+
+2. 使用本地模型（如 Ollama）减少网络延迟
+
+3. 分段翻译，使用 `man <命令> | head -n 1000` 等命令分段处理
+
+### 减少 API 使用量
+
+1. 使用 `clean.sh` 定期清理不常用的翻译
+2. 优先翻译常用命令
+3. 考虑使用本地模型如 Ollama
+
+## 贡献指南
 
 欢迎提交 Issue 和 Pull Request！
 
